@@ -106,6 +106,18 @@ namespace AZT
     class JackEye : public ZombieEye
     {
     private:
+        std::vector<std::pair<AvZ::Grid, int>> jack_stats;
+        void incJackNum(AvZ::Grid plant_position)
+        {
+            for (auto it = jack_stats.begin(); it != jack_stats.end(); it++)
+            {
+                if ((*it).first == plant_position)
+                {
+                    (*it).second++;
+                    return;
+                }
+            }
+        }
         void run(std::vector<AvZ::Grid> plant_list)
         {
             SafePtr<Plant> plant = (Plant *)AvZ::GetMainObject()->plantArray();
@@ -130,8 +142,7 @@ namespace AZT
                     {
                         if (judgeExplode(zombie, p))
                         {
-                            incCallbackNum();
-                            break;
+                            incJackNum({p->row() + 1, p->col() + 1});
                         }
                     }
                     killZombie(zombie);
@@ -143,14 +154,35 @@ namespace AZT
         // ***In Queue
         void start(const std::vector<AvZ::Grid> plant_list)
         {
+            for (auto p : plant_list)
+            {
+                jack_stats.push_back({p, 0});
+            }
             AvZ::InsertOperation([=]()
                                  { pushFunc([=]()
                                             { run(plant_list); }); });
         }
 
-        void report()
+        void print_stats()
         {
-            AvZ::ShowErrorNotInQueue("[Jack Eye] #", getCallbackNum());
+            std::stringstream ss;
+            ss << "[Jack Eye Stats]\n";
+            bool all_zero = true;
+            for (auto s : jack_stats)
+            {
+                if (s.second == 0)
+                    continue;
+                ss << s.first.row << "-" << s.first.col << ": " << s.second << std::endl;
+                if (all_zero)
+                {
+                    all_zero = false;
+                }
+            }
+            if (all_zero)
+            {
+                ss << "NO EXPLOSION\n";
+            }
+            AvZ::ShowErrorNotInQueue("#", ss.str());
         }
     };
 
