@@ -10,7 +10,7 @@
 #include "libavz.h"
 
 #ifndef __AZT_VERSION__
-#define __AZT_VERSION__ 1.01
+#define __AZT_VERSION__ 220530
 #endif
 
 namespace AZT
@@ -75,7 +75,7 @@ namespace AZT
             int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
             for (int i = 0; i < zombies_count_max; ++i, ++zombie)
             {
-                if (zombie->isDead() || zombie->isDisappeared() || !zombie->isExist())
+                if (zombie->isDead() || zombie->isDisappeared())
                     continue;
                 if (condition(zombie))
                 {
@@ -135,7 +135,7 @@ namespace AZT
             int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
             for (int i = 0; i < zombies_count_max; ++i, ++zombie)
             {
-                if (zombie->isDead() || zombie->isDisappeared() || !zombie->isExist())
+                if (zombie->isDead() || zombie->isDisappeared())
                     continue;
                 if ((zombie->type() == JACK_IN_THE_BOX_ZOMBIE && zombie->state() == 16))
                 {
@@ -256,14 +256,12 @@ namespace AZT
             {
                 if (t->modify_delay == 0)
                 {
-                    // AvZ::ShowErrorNotInQueue("handle triggered");
                     auto plant = getValidPlant(t->plant_position, t->type);
                     if (plant == nullptr)
                         continue;
                     auto it = PLANT_ATK_INFO.find(t->type);
                     if (it != PLANT_ATK_INFO.end() && plant->shootCountdown() <= 1)
                     {
-                        //   AvZ::ShowErrorNotInQueue("change shoot");
                         plant->shootCountdown() = std::max(it->second.shoot_countdown - MODIFY_DELAY, 0);
                     }
                     triggered_plant_list.erase(t);
@@ -295,10 +293,13 @@ namespace AZT
     public:
         void start(const std::vector<AvZ::Grid> &plant_list)
         {
-            AvZ::InsertOperation([=]()
-                                 { pushFunc([=]()
-                                            { run(plant_list); }); },
-                                 "AlwaysAttack::start");
+            if (!plant_list.empty())
+            {
+                AvZ::InsertOperation([=]()
+                                     { pushFunc([=]()
+                                                { run(plant_list); }); },
+                                     "AlwaysAttack::start");
+            }
         }
     };
 
@@ -315,6 +316,80 @@ namespace AZT
             AvZ::WriteMemory<uint8_t>(0x74, 0x004265dc);
         }
     }
+
+    // AvZ::IsZombieExist有bug，重新实现
+    bool checkZombieExist(int type = -1, int row = -1)
+    {
+        SafePtr<Zombie> zombie = (Zombie *)AvZ::GetMainObject()->zombieArray();
+        int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
+        for (int i = 0; i < zombies_count_max; ++i, ++zombie)
+        {
+            if (!zombie->isDead() && !zombie->isDisappeared())
+                if (type < 0 && row < 0)
+                {
+                    return true;
+                }
+                else if (type >= 0 && row >= 0)
+                {
+                    if (zombie->row() == row - 1 && zombie->type() == type)
+                        return true;
+                }
+                else if (type < 0 && row >= 0)
+                {
+                    if (zombie->row() == row - 1)
+                        return true;
+                }
+                else // if (type >= 0 && row < 0)
+                {
+                    if (zombie->type() == type)
+                        return true;
+                }
+        }
+        return false;
+    }
+
+    // 锁定刷新工具，精准控制刷新波长
+    class LockWave : public AvZ::TickRunner
+    {
+    private:
+        void run(const std::vector<ZombieType> &zombie_type_list)
+        {
+            bool zombie_found = false;
+            if (zombie_type_list.empty())
+            {
+                zombie_found = checkZombieExist();
+            }
+            else
+            {
+                for (auto z : zombie_type_list)
+                {
+                    if (checkZombieExist(z))
+                    {
+                        zombie_found = true;
+                        break;
+                    }
+                }
+            }
+            int refreshed_time = AvZ::NowTime(AvZ::GetRunningWave());
+            if (zombie_found && refreshed_time >= 400)
+            {
+                zombieSpawnPause(true);
+            }
+            else
+            {
+                zombieSpawnPause(false);
+            }
+        }
+
+    public:
+        void start(const std::vector<ZombieType> &zombie_type_list = {})
+        {
+            AvZ::InsertOperation([=]()
+                                 { pushFunc([=]()
+                                            { run(zombie_type_list); }); },
+                                 "LockWave::start");
+        }
+    };
 
     // 植物无敌
     void plantInvincible(bool f = true)
@@ -437,7 +512,7 @@ namespace AZT
         auto it = rows.begin();
         for (int i = 0; i < zombies_count_max; ++i, ++zombie)
         {
-            if (zombie->isDead() || zombie->isDisappeared() || !zombie->isExist())
+            if (zombie->isDead() || zombie->isDisappeared())
                 continue;
 
             // 只移动本波僵尸
@@ -513,7 +588,7 @@ namespace AZT
         int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
         for (int i = 0; i < zombies_count_max; ++i, ++zombie)
         {
-            if (zombie->isDead() || zombie->isDisappeared() || !zombie->isExist())
+            if (zombie->isDead() || zombie->isDisappeared())
                 continue;
             if (type_list.empty() || type_list.find((ZombieType)zombie->type()) != type_list.end())
                 zombie->state() = 3;
@@ -578,7 +653,7 @@ namespace AZT
                 int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
                 for (int i = 0; i < zombies_count_max; ++i, ++zombie)
                 {
-                    if (zombie->isDead() || zombie->isDisappeared() || !zombie->isExist())
+                    if (zombie->isDead() || zombie->isDisappeared())
                         continue;
                     if (zombie->existTime() > 100)
                         continue;
