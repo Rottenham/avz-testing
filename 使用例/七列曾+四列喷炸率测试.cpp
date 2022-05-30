@@ -10,10 +10,14 @@
 #include "avz_testing.h"
 
 // ***配置部分
-#define TOTAL_TEST_ROUND 51   // 每一批次测试的选卡数
-#define SET_ALL_AS_BIG_WAVE 0 // 0 - 将所有波次转为普通波；1 - 将所有波次转为旗帜波
-#define SKIP_TICK 1           // 0 - 慢放，用于检查情况；1 - 开启跳帧测试
-#define BATCH_SIZE 3          // 批次数，对应不同的用冰时机
+#define TOTAL_TEST_ROUND 51                                              // 每一批次测试的选卡数
+#define SET_ALL_AS_BIG_WAVE 0                                            // 0 - 将所有波次转为普通波；1 - 将所有波次转为旗帜波
+#define SKIP_TICK 1                                                      // 0 - 慢放，用于检查情况；1 - 开启跳帧测试
+#define BATCH_SIZE 3                                                     // 批次数，对应不同的用冰时机
+std::vector<Grid> gloom_list = {{3, 7}, {4, 7}};                         // 曾哥列表
+std::vector<Grid> always_attack_list = {{3, 7}, {4, 7}, {2, 4}, {5, 4}}; // 设为永动攻击的植物列表
+std::set<int> jack_rows = {2, 5};                                        // 小丑行数
+const std::vector<int> ice_time_list = {316, 356, 396};                  // 要测试的用冰时机
 // ***配置部分结束
 
 using namespace AvZ;
@@ -26,13 +30,7 @@ int current_jackdata = 0; // 当前所在批次
 
 void Script()
 {
-    // ***配置部分
-    std::vector<Grid> gloom_list = {{3, 7}, {4, 7}};                         // 曾哥列表
-    std::vector<Grid> always_attack_list = {{3, 7}, {4, 7}, {2, 4}, {5, 4}}; // 设为永动攻击的植物列表
-    std::set<int> jack_rows = {2, 5};                                        // 小丑行数
-    const std::vector<int> ice_time_list = {316, 356, 396};                  // 要测试的用冰时机
-    assert(ice_time_list.size() == BATCH_SIZE);                              // 防止误输入
-    // ***配置部分结束
+    assert(ice_time_list.size() == BATCH_SIZE); // 防止误输入
 
     // 跳帧测试
     auto condition = [=]()
