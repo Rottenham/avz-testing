@@ -14,7 +14,7 @@
 #define SET_ALL_AS_BIG_WAVE 0                                            // 0 - 将所有波次转为普通波；1 - 将所有波次转为旗帜波
 #define SKIP_TICK 1                                                      // 0 - 慢放，用于检查情况；1 - 开启跳帧测试
 #define BATCH_SIZE 3                                                     // 批次数，对应不同的用冰时机
-std::vector<Grid> gloom_list = {{3, 7}, {4, 7}};                         // 曾哥列表
+std::vector<Grid> test_plant_list = {{3, 7}, {4, 7}};                    // 要统计炸率的植物列表
 std::vector<Grid> always_attack_list = {{3, 7}, {4, 7}, {2, 4}, {5, 4}}; // 设为永动攻击的植物列表
 std::set<int> jack_rows = {2, 5};                                        // 小丑行数
 const std::vector<int> ice_time_list = {316, 356, 396};                  // 要测试的用冰时机
@@ -86,8 +86,8 @@ void Script()
     killAllZombie({10, 20}, {BUNGEE_ZOMBIE});
 
     SetTime(-599, 1);
-    jd_list[current_jackdata].start(gloom_list); // 开始记录曾的炸率数据
-    aa.start(always_attack_list);                // 使曾哥永动
+    jd_list[current_jackdata].start(test_plant_list); 	// 开始记录指定植物的炸率数据
+    aa.start(always_attack_list);                		// 使指定植物永动
 
     // 自由种植功能里已开启蘑菇免唤醒
     for (int w = 1; w <= 20; w++)
