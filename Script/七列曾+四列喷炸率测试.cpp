@@ -106,7 +106,7 @@ void Script()
     }
 
     // w20扫尾
-    killAllZombie({9}, {}, 1000);
+    killAllZombie({20}, {}, 3000);
 
     // 更新已经完成的选卡数
     InsertTimeOperation(0, 20, [=]()
