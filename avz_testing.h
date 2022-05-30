@@ -2,7 +2,7 @@
  * @Author: crescendo
  * @Date: 2022-05-28 08:45:31
  * @Last Modified by: crescendo
- * @Last Modified time: 2022-05-28 10:29:46
+ * @Last Modified time: 2022-05-29 17:30:26
  *  __AVZ_VERSION__ == 220213
  */
 
@@ -10,7 +10,7 @@
 #include "libavz.h"
 
 #ifndef __AZT_VERSION__
-#define __AZT_VERSION__ 1.0
+#define __AZT_VERSION__ 1.01
 #endif
 
 namespace AZT
@@ -64,7 +64,8 @@ namespace AZT
         zombie->state() = 3;
     }
 
-    class ZombieEye : public AvZ::TickRunner
+    // 僵尸数据记录
+    class ZombieData : public AvZ::TickRunner
     {
     private:
         int callback_num = 0;
@@ -75,9 +76,7 @@ namespace AZT
             for (int i = 0; i < zombies_count_max; ++i, ++zombie)
             {
                 if (zombie->isDead() || zombie->isDisappeared() || !zombie->isExist())
-                {
                     continue;
-                }
                 if (condition(zombie))
                 {
                     callback(zombie);
@@ -91,7 +90,8 @@ namespace AZT
         {
             AvZ::InsertOperation([=]()
                                  { pushFunc([=]()
-                                            { run(condition, callback); }); });
+                                            { run(condition, callback); }); },
+                                 "ZombieData::start");
         }
         int getCallbackNum()
         {
@@ -103,11 +103,12 @@ namespace AZT
         }
     };
 
-    class JackEye : public ZombieEye
+    // 小丑数据记录
+    class JackData : public ZombieData
     {
     private:
         std::vector<std::pair<AvZ::Grid, int>> jack_stats;
-        void incJackNum(AvZ::Grid plant_position)
+        void incJackNum(const AvZ::Grid &plant_position)
         {
             for (auto it = jack_stats.begin(); it != jack_stats.end(); it++)
             {
@@ -118,24 +119,24 @@ namespace AZT
                 }
             }
         }
-        void run(std::vector<AvZ::Grid> plant_list)
+        void run(const std::vector<AvZ::Grid> &plant_list)
         {
             SafePtr<Plant> plant = (Plant *)AvZ::GetMainObject()->plantArray();
             std::vector<SafePtr<Plant>> final_plant_list;
-            for (auto g : plant_list)
+            for (const auto &p : plant_list)
             {
-                int idx = AvZ::GetPlantIndex(g.row, g.col);
+                int idx = AvZ::GetPlantIndex(p.row, p.col);
                 if (idx >= 0)
+                {
                     final_plant_list.push_back(plant + idx);
+                }
             }
             SafePtr<Zombie> zombie = (Zombie *)AvZ::GetMainObject()->zombieArray();
             int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
             for (int i = 0; i < zombies_count_max; ++i, ++zombie)
             {
                 if (zombie->isDead() || zombie->isDisappeared() || !zombie->isExist())
-                {
                     continue;
-                }
                 if ((zombie->type() == JACK_IN_THE_BOX_ZOMBIE && zombie->state() == 16))
                 {
                     for (auto p : final_plant_list)
@@ -152,7 +153,7 @@ namespace AZT
 
     public:
         // ***In Queue
-        void start(const std::vector<AvZ::Grid> plant_list)
+        void start(const std::vector<AvZ::Grid> &plant_list)
         {
             for (auto p : plant_list)
             {
@@ -160,34 +161,150 @@ namespace AZT
             }
             AvZ::InsertOperation([=]()
                                  { pushFunc([=]()
-                                            { run(plant_list); }); });
+                                            { run(plant_list); }); },
+                                 "JackData::start");
         }
 
         void print_stats()
         {
             std::stringstream ss;
-            ss << "[Jack Eye Stats]\n";
-            bool all_zero = true;
-            for (auto s : jack_stats)
+            ss << "[小丑统计信息]\n";
+            bool empty = true;
+            for (const auto &s : jack_stats)
             {
                 if (s.second == 0)
                     continue;
                 ss << s.first.row << "-" << s.first.col << ": " << s.second << std::endl;
-                if (all_zero)
+                if (empty)
                 {
-                    all_zero = false;
+                    empty = false;
                 }
             }
-            if (all_zero)
+            if (empty)
             {
-                ss << "NO EXPLOSION\n";
+                ss << "未出现爆炸\n";
             }
             AvZ::ShowErrorNotInQueue("#", ss.str());
         }
     };
 
+    struct PlantAttackInfo
+    {
+        int shoot_countdown;
+        std::set<int> trigger_time = {1};
+    };
+
+    struct PlantModifyInfo
+    {
+        PlantType type;
+        AvZ::Grid plant_position;
+        int modify_delay;
+    };
+
+    struct PlantAZT : public Plant
+    {
+        int &attackCountdown()
+        {
+            return (int &)((uint8_t *)this)[0x58];
+        }
+    };
+
+    // 将植物设为永动攻击状态
+    class AlwaysAttack : public AvZ::TickRunner
+    {
+    private:
+        // 满足修改条件后，延迟若干cs后再修改
+        static const int MODIFY_DELAY = 5;
+
+        // 由于技术原因，暂时不支持以下植物：仙人掌、裂荚、三线、玉米、香蒲、地刺
+        const std::map<PlantType, PlantAttackInfo> PLANT_ATK_INFO = {{PEASHOOTER, {35}}, {SNOW_PEA, {35}}, {REPEATER, {26, {26, 1}}}, {PUFF_SHROOM, {29}}, {SEA_SHROOM, {29}}, {FUME_SHROOM, {50}}, {SCAREDY_SHROOM, {25}}, {STARFRUIT, {40}}, {CABBAGE_PULT, {26}}, {MELON_PULT, {36}}, {WINTER_MELON, {36}}, {GATLING_PEA, {100}}, {GLOOM_SHROOM, {200}}};
+
+        SafePtr<PlantAZT> getValidPlant(const AvZ::Grid &p, int type = -1)
+        {
+            auto idx = AvZ::GetPlantIndex(p.row, p.col);
+            if (idx < 0)
+                return nullptr;
+            SafePtr<PlantAZT> plant = (PlantAZT *)AvZ::GetMainObject()->plantArray();
+            plant += idx;
+            bool valid_plant = true;
+            if (type != -1)
+            {
+                if (plant->type() != type)
+                    valid_plant = false;
+                if (type == CACTUS)
+                {
+                    if (!(plant->state() >= 30 && plant->state() <= 33))
+                        valid_plant = false;
+                }
+                else if (type == SCAREDY_SHROOM)
+                {
+                    if (plant->state() != 1)
+                        valid_plant = false;
+                }
+                else
+                {
+                    if (plant->state() != 0)
+                        valid_plant = false;
+                }
+            }
+            return valid_plant ? plant : nullptr;
+        }
+
+        void run(const std::vector<AvZ::Grid> &plant_position)
+        {
+            for (auto t = triggered_plant_list.begin(); t != triggered_plant_list.end();)
+            {
+                if (t->modify_delay == 0)
+                {
+                    // AvZ::ShowErrorNotInQueue("handle triggered");
+                    auto plant = getValidPlant(t->plant_position, t->type);
+                    if (plant == nullptr)
+                        continue;
+                    auto it = PLANT_ATK_INFO.find(t->type);
+                    if (it != PLANT_ATK_INFO.end() && plant->shootCountdown() <= 1)
+                    {
+                        //   AvZ::ShowErrorNotInQueue("change shoot");
+                        plant->shootCountdown() = std::max(it->second.shoot_countdown - MODIFY_DELAY, 0);
+                    }
+                    triggered_plant_list.erase(t);
+                }
+                else
+                {
+                    t->modify_delay--;
+                    t++;
+                }
+            }
+            for (const auto &p : plant_position)
+            {
+                auto plant = getValidPlant(p);
+                if (plant == nullptr)
+                    continue;
+                auto it = PLANT_ATK_INFO.find((PlantType)plant->type());
+                if (it != PLANT_ATK_INFO.end())
+                {
+                    auto trigger_time = it->second.trigger_time;
+                    if (trigger_time.find(plant->attackCountdown()) != trigger_time.end())
+                    {
+                        triggered_plant_list.push_back({(PlantType)plant->type(), p, MODIFY_DELAY});
+                    }
+                }
+            }
+        }
+        std::vector<PlantModifyInfo> triggered_plant_list;
+
+    public:
+        void start(const std::vector<AvZ::Grid> &plant_list)
+        {
+            AvZ::InsertOperation([=]()
+                                 { pushFunc([=]()
+                                            { run(plant_list); }); },
+                                 "AlwaysAttack::start");
+        }
+    };
+
     // 暂停出怪
-    void zombieSpawnPause(bool f = true)
+    void
+    zombieSpawnPause(bool f = true)
     {
         if (f)
         {
@@ -321,21 +438,15 @@ namespace AZT
         for (int i = 0; i < zombies_count_max; ++i, ++zombie)
         {
             if (zombie->isDead() || zombie->isDisappeared() || !zombie->isExist())
-            {
                 continue;
-            }
 
             // 只移动本波僵尸
             if (zombie->existTime() > 100)
-            {
                 continue;
-            }
 
             // 检测类型
             if (zombie->type() != zombie_type)
-            {
                 continue;
-            }
 
             int row = zombie->row();
             int new_row = *it;
@@ -354,35 +465,6 @@ namespace AZT
         }
     }
 
-    // 移动 w1~w20 多波僵尸
-    void moveZombieMany(ZombieType zombie_type, const std::set<int> &rows)
-    {
-        if (zombie_type < 0 || zombie_type > 32)
-        {
-            return;
-        }
-        std::set<int> rows_converted; // 0~5
-        for (auto r : rows)
-        {
-            if (r >= 1 && r <= 6)
-            {
-                rows_converted.emplace(r - 1);
-            }
-        }
-        if (rows_converted.empty())
-        {
-            return;
-        }
-        int scene = AvZ::GetMainObject()->scene();
-        int height = scene == 0 || scene == 1 ? 100 : 85;
-        int baseY = scene == 0 || scene == 1 || scene == 2 || scene == 3 ? 50 : 40;
-        for (auto w = 1; w <= 20; w++)
-        {
-            AvZ::InsertTimeOperation(1, w, [=]()
-                                     { moveZombieOne(zombie_type, rows_converted, height, baseY); });
-        }
-    }
-
     // 将僵尸移动至特定行
     // ***使用示例：
     // moveZombieRow({{JACK_IN_THE_BOX_ZOMBIE, {2, 5}}, {LADDER_ZOMBIE, {1, 6}}});
@@ -390,43 +472,60 @@ namespace AZT
     {
         for (const auto &zri : zombie_row_info)
         {
-            moveZombieMany(zri.zombie_type, zri.rows);
+            auto zombie_type = zri.zombie_type;
+            auto rows = zri.rows;
+            if (zombie_type < 0 || zombie_type > 32)
+                continue;
+            std::set<int> rows_converted; // 0~5
+            for (auto r : rows)
+            {
+                if (r >= 1 && r <= 6)
+                {
+                    rows_converted.emplace(r - 1);
+                }
+            }
+            if (rows_converted.empty())
+                continue;
+            int scene = AvZ::GetMainObject()->scene();
+            int height = scene == 0 || scene == 1 ? 100 : 85;
+            int baseY = scene == 0 || scene == 1 || scene == 2 || scene == 3 ? 50 : 40;
+            for (auto w = 1; w <= 20; w++)
+            {
+                AvZ::InsertTimeOperation(
+                    1, w, [=]()
+                    { moveZombieOne(zombie_type, rows_converted, height, baseY); },
+                    "moveZombieOne");
+            }
         }
     }
 
     // 将僵尸移动至特定行
     // ***使用示例：
     // moveZombieRow(JACK_IN_THE_BOX_ZOMBIE, {2, 5});
-    void moveZombieRow(ZombieType zombie_type, std::set<int> rows)
+    void moveZombieRow(ZombieType zombie_type, const std::set<int> &rows)
     {
         moveZombieRow({{zombie_type, rows}});
     }
 
-    void killAllZombie()
+    void killAllZombie(const std::set<ZombieType> &type_list)
     {
         SafePtr<Zombie> zombie = (Zombie *)AvZ::GetMainObject()->zombieArray();
         int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
         for (int i = 0; i < zombies_count_max; ++i, ++zombie)
         {
             if (zombie->isDead() || zombie->isDisappeared() || !zombie->isExist())
-            {
                 continue;
-            }
-            zombie->state() = 3;
+            if (type_list.empty() || type_list.find((ZombieType)zombie->type()) != type_list.end())
+                zombie->state() = 3;
         }
-    }
-
-    void killAllZombie(int wave, int time)
-    {
-        AvZ::InsertTimeOperation(time, wave, [=]()
-                                 { killAllZombie(); });
     }
 
     // 秒杀全部僵尸
     // ***使用示例：
     // killAllZombie({10, 20}); // w10、w20僵尸刷出后立刻秒杀
-    // killAllZombie({1}, 401); // w1僵尸刷出401cs后秒杀
-    void killAllZombie(const std::set<int> &wave, int time = 1)
+    // killAllZombie({1}, {}, 401); // w1僵尸刷出401cs后秒杀
+    // killAllZombie({10, 20}, {BUNGEE_ZOMBIE}); // w10、w20蹦极僵尸刷出后立刻秒杀
+    void killAllZombie(const std::set<int> &wave, std::set<ZombieType> type_list = {}, int time = 1)
     {
         if (time < 0)
         {
@@ -436,8 +535,58 @@ namespace AZT
         {
             if (w >= 1 && w <= 20)
             {
-                killAllZombie(w, time);
+                AvZ::InsertTimeOperation(
+                    time, w, [=]()
+                    { killAllZombie(type_list); },
+                    "killAllZombie");
             }
+        }
+    }
+
+    enum UnifyMode
+    {
+        BIG_WAVE = 0,
+        NORMAL_WAVE,
+    };
+
+    // 将所有波次统一为非旗帜波或旗帜波
+    // ***使用示例
+    // unifyAllWaves(BIG_WAVE); // 将所有波次转换为旗帜波
+    void unifyAllWaves(UnifyMode mode)
+    {
+        bool f = (mode == BIG_WAVE);
+        int x_offset = f ? 40 : -40;
+        std::set<ZombieType> exclude_zombie_list = {
+            FLAG_ZOMBIE,
+            POLE_VAULTING_ZOMBIE,
+            ZOMBONI,
+            CATAPULT_ZOMBIE,
+            GARGANTUAR,
+            GIGA_GARGANTUAR,
+            BUNGEE_ZOMBIE};
+
+        for (int w = 1; w <= 20; w++)
+        {
+            if (f && (w == 10 || w == 20))
+                continue;
+            if (!f && !(w == 10 || w == 20))
+                continue;
+            AvZ::InsertTimeOperation(
+                1, w, [=]()
+                {
+                SafePtr<Zombie> zombie = (Zombie *)AvZ::GetMainObject()->zombieArray();
+                int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
+                for (int i = 0; i < zombies_count_max; ++i, ++zombie)
+                {
+                    if (zombie->isDead() || zombie->isDisappeared() || !zombie->isExist())
+                        continue;
+                    if (zombie->existTime() > 100)
+                        continue;
+                    if (exclude_zombie_list.find((ZombieType)zombie->type()) != exclude_zombie_list.end())
+                        continue;
+                    zombie->abscissa() += x_offset;
+                } },
+                "unifyAllWaves");
         }
     }
 
