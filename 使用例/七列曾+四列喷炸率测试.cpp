@@ -32,7 +32,7 @@ void Script()
     std::set<int> jack_rows = {2, 5};                                        // 小丑行数
     const std::vector<int> ice_time_list = {316, 356, 396};                  // 要测试的用冰时机
     assert(ice_time_list.size() == BATCH_SIZE);                              // 防止误输入
-                                                                             // ***配置部分结束
+    // ***配置部分结束
 
     // 跳帧测试
     auto condition = [=]()
