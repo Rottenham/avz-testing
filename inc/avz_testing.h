@@ -10,7 +10,7 @@
 #include "libavz.h"
 
 #ifndef __AZT_VERSION__
-#define __AZT_VERSION__ 220530
+#define __AZT_VERSION__ 220603
 #endif
 
 namespace AZT
@@ -27,9 +27,13 @@ namespace AZT
         {
             return (int &)((uint8_t *)this)[0x20];
         }
+        int &animationIndex()
+        {
+            return (int &)((uint8_t *)this)[0x118];
+        }
     };
 
-    std::pair<int, int> getDefenseRange(PlantType type)
+    std::pair<int, int> getExplodeDefenseRange(PlantType type)
     {
         switch (type)
         {
@@ -44,7 +48,22 @@ namespace AZT
         }
     }
 
-    bool judgeExplode(SafePtr<Zombie> &z, SafePtr<Plant> &p)
+    std::pair<int, int> getHitDefenseRange(PlantType type)
+    {
+        switch (type)
+        {
+        case TALL_NUT:
+            return {30, 60};
+        case PUMPKIN:
+            return {20, 80};
+        case COB_CANNON:
+            return {20, 120};
+        default:
+            return {30, 50};
+        }
+    }
+
+    bool judgeExplode(SafePtr<Zombie> z, SafePtr<Plant> p)
     {
         int x = z->abscissa(), y = z->ordinate();
         int y_dis = 0;
@@ -55,8 +74,25 @@ namespace AZT
         if (y_dis > 90)
             return false;
         int x_dis = sqrt(90 * 90 - y_dis * y_dis);
-        auto def = getDefenseRange(PlantType(p->type()));
+        auto def = getExplodeDefenseRange(PlantType(p->type()));
         return p->xi() + def.first - x_dis <= x && x <= p->xi() + def.second + x_dis;
+    }
+
+    bool judgeHammer(SafePtr<Zombie> z, SafePtr<Plant> p)
+    {
+        if (z->row() != p->row())
+            return false;
+        std::pair<int, int> z_atk = {z->abscissa() - 30, z->abscissa() - 30 + 89};
+        auto p_def = getHitDefenseRange(PlantType(p->type()));
+        p_def.first += p->xi();
+        p_def.second += p->xi();
+        bool result = std::max(z_atk.first, p_def.first) <= std::min(z_atk.second, p_def.second);
+        // if (result)
+        // {
+        //     AvZ::ShowErrorNotInQueue("z_x=#, p_x=#, z_atk=#~#, pdef=#~#", z->abscissa(), p->xi(), z_atk.first, z_atk.second, p_def.first, p_def.second);
+        // }
+
+        return result;
     }
 
     void killZombie(SafePtr<Zombie> zombie)
@@ -71,7 +107,7 @@ namespace AZT
         int callback_num = 0;
         void run(std::function<bool(SafePtr<Zombie>)> condition, std::function<void(SafePtr<Zombie>)> callback)
         {
-            SafePtr<Zombie> zombie = (Zombie *)AvZ::GetMainObject()->zombieArray();
+            SafePtr<Zombie> zombie = AvZ::GetMainObject()->zombieArray();
             int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
             for (int i = 0; i < zombies_count_max; ++i, ++zombie)
             {
@@ -121,7 +157,7 @@ namespace AZT
         }
         void run(const std::vector<AvZ::Grid> &plant_list)
         {
-            SafePtr<Plant> plant = (Plant *)AvZ::GetMainObject()->plantArray();
+            SafePtr<Plant> plant = AvZ::GetMainObject()->plantArray();
             std::vector<SafePtr<Plant>> final_plant_list;
             for (const auto &p : plant_list)
             {
@@ -131,7 +167,7 @@ namespace AZT
                     final_plant_list.push_back(plant + idx);
                 }
             }
-            SafePtr<Zombie> zombie = (Zombie *)AvZ::GetMainObject()->zombieArray();
+            SafePtr<Zombie> zombie = AvZ::GetMainObject()->zombieArray();
             int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
             for (int i = 0; i < zombies_count_max; ++i, ++zombie)
             {
@@ -165,26 +201,29 @@ namespace AZT
                                  "JackData::start");
         }
 
-        void print_stats()
+        std::string stats()
         {
             std::stringstream ss;
             ss << "[小丑统计信息]\n";
             bool empty = true;
+            bool first = true;
             for (const auto &s : jack_stats)
             {
                 if (s.second == 0)
                     continue;
-                ss << s.first.row << "-" << s.first.col << ": " << s.second << std::endl;
+                if (first)
+                    first = false;
+                else
+                    ss << "\n";
+                ss << s.first.row << "-" << s.first.col << ": " << s.second;
                 if (empty)
-                {
                     empty = false;
-                }
             }
             if (empty)
             {
                 ss << "未出现爆炸\n";
             }
-            AvZ::ShowErrorNotInQueue("#", ss.str());
+            return ss.str();
         }
     };
 
@@ -320,7 +359,7 @@ namespace AZT
     // AvZ::IsZombieExist有bug，重新实现
     bool checkZombieExist(int type = -1, int row = -1)
     {
-        SafePtr<Zombie> zombie = (Zombie *)AvZ::GetMainObject()->zombieArray();
+        SafePtr<Zombie> zombie = AvZ::GetMainObject()->zombieArray();
         int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
         for (int i = 0; i < zombies_count_max; ++i, ++zombie)
         {
@@ -503,6 +542,19 @@ namespace AZT
         }
     }
 
+    // 玉米炮无冷却
+    void cobCannonNoCD(bool f = true)
+    {
+        if (f)
+        {
+            AvZ::WriteMemory<uint8_t>(0x80, 0x0046103b);
+        }
+        else
+        {
+            AvZ::WriteMemory<uint8_t>(0x85, 0x0046103b);
+        }
+    }
+
     // ***Not In Queue
     // 移动单波僵尸
     void moveZombieOne(ZombieType zombie_type, const std::set<int> &rows, int height, int baseY)
@@ -510,6 +562,7 @@ namespace AZT
         SafePtr<ZombieAZT> zombie = (ZombieAZT *)AvZ::GetMainObject()->zombieArray();
         int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
         auto it = rows.begin();
+        std::advance(it, rand() % (rows.size()));
         for (int i = 0; i < zombies_count_max; ++i, ++zombie)
         {
             if (zombie->isDead() || zombie->isDisappeared())
@@ -584,7 +637,7 @@ namespace AZT
 
     void killAllZombie(const std::set<ZombieType> &type_list)
     {
-        SafePtr<Zombie> zombie = (Zombie *)AvZ::GetMainObject()->zombieArray();
+        SafePtr<Zombie> zombie = AvZ::GetMainObject()->zombieArray();
         int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
         for (int i = 0; i < zombies_count_max; ++i, ++zombie)
         {
@@ -649,7 +702,7 @@ namespace AZT
             AvZ::InsertTimeOperation(
                 1, w, [=]()
                 {
-                SafePtr<Zombie> zombie = (Zombie *)AvZ::GetMainObject()->zombieArray();
+                SafePtr<Zombie> zombie = AvZ::GetMainObject()->zombieArray();
                 int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
                 for (int i = 0; i < zombies_count_max; ++i, ++zombie)
                 {
@@ -665,31 +718,63 @@ namespace AZT
         }
     }
 
+    // 根据出怪列表记录僵尸总数，可指定要记录的僵尸类别与要忽略的波次
+    // ***使用示例：
+    // sum += countZombie({JACK_IN_THE_BOX_ZOMBIE}, {10, 20}); // 统计非旗帜波的小丑总数
+    int countZombie(std::set<ZombieType> type_list = {}, std::set<int> ignore_wave = {})
+    {
+        int count = 0;
+        uint32_t *current_zombie = AvZ::GetMainObject()->zombieList();
+        for (int wave = 1; wave <= 20; wave++)
+        {
+            if (!ignore_wave.empty() && ignore_wave.find(wave) != ignore_wave.end())
+            {
+                current_zombie += 50;
+                continue;
+            }
+            for (int j = 0; j < 50; j++)
+            {
+                if (type_list.empty() || type_list.find((ZombieType)*current_zombie) != type_list.end())
+                {
+                    count++;
+                }
+                current_zombie++;
+            }
+        }
+        return count;
+    }
+
+    struct AnimationMainAZT : public AnimationMain
+    {
+    public:
+        int &animationTotal()
+        {
+            return (int &)((uint8_t *)this)[0x4];
+        }
+    };
+
+    struct AnimationAZT : public Animation
+    {
+        // 动画循环率
+        int &animationObjectIndex()
+        {
+            return (int &)((uint8_t *)this)[0x9C];
+        }
+    };
+
+    AnimationAZT *getAnimationFromZombie(SafePtr<Zombie> zombie)
+    {
+        ZombieAZT *zombieazt_ptr = (ZombieAZT *)zombie;
+        int animation_index = zombieazt_ptr->animationIndex();
+        AnimationAZT *animation = (AnimationAZT *)AvZ::GetPvzBase()->animationMain()->animationOffset()->animationArray();
+        AnimationMainAZT *animation_main = (AnimationMainAZT *)AvZ::GetPvzBase()->animationMain();
+        int animation_count_max = animation_main->animationTotal();
+        for (int i = 0; i < animation_count_max; i++, animation++)
+        {
+            if (animation->animationObjectIndex() == animation_index)
+                return animation;
+        }
+        return nullptr;
+    }
+
 } // namespace AZT
-
-/*
-getDefenseRange and judgeExplode are taken from 炸率测试-v1.0rc2.cpp with the
-following License.
-
-MIT License
-
-Copyright (c) 2022 Reisen
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
