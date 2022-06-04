@@ -10,7 +10,7 @@
 #include "libavz.h"
 
 #ifndef __AZT_VERSION__
-#define __AZT_VERSION__ 220604
+#define __AZT_VERSION__ 220605
 #endif
 
 namespace AZT
