@@ -1,7 +1,5 @@
 # AvZ Testing 测试框架
 
-![GitHub](https://badgen.net/badge/GitHub/avz_testing/cyan?icon=github)
-
 ## 运行环境
 
 本插件针对 AvZ 220213 版本开发，不确保对其它 AvZ 版本的兼容性。
