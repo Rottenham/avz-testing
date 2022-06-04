@@ -2,7 +2,7 @@
  * @Author: crescendo
  * @Date: 2022-05-28 08:45:31
  * @Last Modified by: crescendo
- * @Last Modified time: 2022-05-29 17:30:26
+ * @Last Modified time: 2022-06-03 19:17:26
  *  __AVZ_VERSION__ == 220213
  */
 
@@ -10,7 +10,7 @@
 #include "libavz.h"
 
 #ifndef __AZT_VERSION__
-#define __AZT_VERSION__ 220603
+#define __AZT_VERSION__ 220604
 #endif
 
 namespace AZT
@@ -635,7 +635,7 @@ namespace AZT
         moveZombieRow({{zombie_type, rows}});
     }
 
-    void killAllZombie(const std::set<ZombieType> &type_list)
+    void killAllZombieByType(const std::set<ZombieType> &type_list)
     {
         SafePtr<Zombie> zombie = AvZ::GetMainObject()->zombieArray();
         int zombies_count_max = AvZ::GetMainObject()->zombieTotal();
@@ -665,7 +665,7 @@ namespace AZT
             {
                 AvZ::InsertTimeOperation(
                     time, w, [=]()
-                    { killAllZombie(type_list); },
+                    { killAllZombieByType(type_list); },
                     "killAllZombie");
             }
         }
@@ -778,3 +778,30 @@ namespace AZT
     }
 
 } // namespace AZT
+
+/*
+getDefenseRange and judgeExplode are taken from 炸率测试-v1.0rc2.cpp with the
+following License.
+
+MIT License
+
+Copyright (c) 2022 Reisen
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
