@@ -34,6 +34,11 @@ using namespace cresc;
 cresc::Logger Log("C:/MyFolder");
 ```
 
+若使用反斜杠，请使用双反斜杠，如：
+```c++
+cresc::Logger Log("C:\\MyFolder");
+```
+
 > 考虑到测试样本量大的情况，示例程序默认将统计结果分10次输出，即便中途退出也能尽可能保留数据。
 
 
