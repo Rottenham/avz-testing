@@ -38,7 +38,7 @@ std::vector<int> ice_time_list = {-1};
 // 要测试的用冰时机，0代表不用冰
 /* 配置部分结束 */
 
-AZL::Logger Log;
+Logger Log;
 AlwaysAttack aa;
 LockWave lw;
 std::vector<JackData> jd_list(BATCH_SIZE, JackData());

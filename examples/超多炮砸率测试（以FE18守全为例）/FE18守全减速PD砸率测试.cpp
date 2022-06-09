@@ -43,7 +43,7 @@ std::vector<int> zombie_type_list = {POLE_VAULTING_ZOMBIE, DANCING_ZOMBIE, ZOMBO
 // 指定要测试的僵尸组合（极限出怪）
 /* 配置部分结束 */
 
-AZL::Logger Log;
+Logger Log;
 ZombieData zd;
 int completed_round = 0;
 int total_zombie_num = 0;

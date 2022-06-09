@@ -39,7 +39,7 @@ std::vector<int> zombie_type_list = {CONEHEAD_ZOMBIE, JACK_IN_THE_BOX_ZOMBIE, FO
 // 指定要测试的僵尸组合（极限出怪）
 /* 配置部分结束 */
 
-AZL::Logger Log;
+Logger Log;
 AlwaysAttack aa;
 LockWave lw;
 std::vector<JackData> jd_list(BATCH_SIZE, JackData());
