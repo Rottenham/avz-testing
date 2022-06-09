@@ -27,7 +27,7 @@ using namespace cresc;
 
 示例里默认使用 AvZ Logger 记录相关数据。输出文件将优先被保存至桌面的 AZL_output 文件夹下。
 
-若打开该文件夹失败，程序会试图在 C:\Software\AsmVsZombies 目录下创建 AZL_output 文件夹。
+> 若打开该文件夹失败，程序会试图在 C:\Software\AsmVsZombies 目录下创建 AZL_output 文件夹。
 
 你可以自行指定输出文件夹的位置，如：
 ```c++
